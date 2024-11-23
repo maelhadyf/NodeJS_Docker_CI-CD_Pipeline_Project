@@ -40,10 +40,10 @@ jobs:
       run: |
         # Save SSH key
         echo "${{ secrets.AWS_SSH_KEY }}" > ssh_key.pem
-        chmod 600 ssh_key.pem
+        chmod 400 ssh_key.pem
 
         # SSH into the EC2 instance and deploy the container
-        ssh -o StrictHostKeyChecking=no -i ssh_key.pem ubuntu@${{ secrets.AWS_HOST }} << EOF
+        ssh -o StrictHostKeyChecking=no -i ssh_key.pem ec2-user@${{ secrets.AWS_HOST }} << EOF
           # Pull the latest image
           docker pull $DOCKER_IMAGE
           
