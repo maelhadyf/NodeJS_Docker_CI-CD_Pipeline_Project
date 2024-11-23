@@ -2,26 +2,48 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required for creating and pushing tags
     
-    concurrency: 
-      group: ${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: true
-
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
+      with:
+        fetch-depth: 0 # Required for git tag operations
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
+    - name: Generate new version
+      id: version
+      run: |
+        # Get the latest tag or start with v0.0.0
+        git fetch --tags
+        LATEST_TAG=$(git tag --sort=-v:refname | head -n 1 || echo "v0.0.0")
+        echo "Latest tag: $LATEST_TAG"
+        
+        # Remove 'v' prefix and split into array
+        IFS='.' read -ra VERSION_PARTS <<< "${LATEST_TAG#v}"
+        
+        # Increment patch version
+        MAJOR=${VERSION_PARTS[0]:-0}
+        MINOR=${VERSION_PARTS[1]:-0}
+        PATCH=$((${VERSION_PARTS[2]:-0} + 1))
+        
+        # Create new version
+        NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+        echo "New version: $NEW_VERSION"
+        echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+        
+        # Create and push new tag
+        git config --global user.email "github-actions@github.com"
+        git config --global user.name "GitHub Actions"
+        git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
+        git push origin "v$NEW_VERSION"
 
     - name: Login to Docker Hub
       uses: docker/login-action@v2
@@ -29,72 +51,66 @@ jobs:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
 
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
     - name: Build and push Docker image
       uses: docker/build-push-action@v4
       with:
         context: .
-        push: ${{ github.event_name != 'pull_request' }}
-        tags: ${{ secrets.DOCKER_USERNAME }}/nodejs-app:latest,${{ secrets.DOCKER_USERNAME }}/nodejs-app:${{ github.sha }}
+        push: true
+        tags: |
+          ${{ secrets.DOCKER_USERNAME }}/nodejs-app:latest
+          ${{ secrets.DOCKER_USERNAME }}/nodejs-app:${{ steps.version.outputs.version }}
         cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/nodejs-app:buildcache
         cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/nodejs-app:buildcache,mode=max
 
-    - name: Deploy to AWS EC2
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    - name: Deploy to EC2
+      if: github.ref == 'refs/heads/main'
       env:
-        DOCKER_IMAGE: ${{ secrets.DOCKER_USERNAME }}/nodejs-app:${{ github.sha }}
+        DOCKER_IMAGE: ${{ secrets.DOCKER_USERNAME }}/nodejs-app:${{ steps.version.outputs.version }}
         DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
       run: |
-        # Setup SSH directory
+        # Setup SSH
         mkdir -p ~/.ssh
-        chmod 700 ~/.ssh
-        
-        # Write the private key file
         echo "${{ secrets.AWS_SSH_KEY }}" > ~/.ssh/deploy_key
         chmod 600 ~/.ssh/deploy_key
         
-        # Setup SSH config
-        cat > ~/.ssh/config << EOF
-        Host *
-          StrictHostKeyChecking no
-          UserKnownHostsFile=/dev/null
-          IdentityFile ~/.ssh/deploy_key
-        EOF
-        
+        # Disable strict host checking
+        echo "StrictHostKeyChecking no" >> ~/.ssh/config
         chmod 600 ~/.ssh/config
         
-        # For debugging (optional)
-        echo "Testing SSH connection..."
-        ssh -v -i ~/.ssh/deploy_key ec2-user@${{ secrets.AWS_HOST }} "echo 'SSH connection successful'"
-        
-        # Deploy
-        ssh -i ~/.ssh/deploy_key ec2-user@${{ secrets.AWS_HOST }} "\
-          set -e && \
-          echo 'Pulling Docker image...' && \
-          docker pull ${DOCKER_IMAGE} && \
-          echo 'Stopping existing container...' && \
-          if docker ps -a | grep -q 'nodejs-app'; then \
-            docker stop nodejs-app || true && \
-            docker rm nodejs-app || true; \
-          fi && \
-          echo 'Starting new container...' && \
+        # Deploy to EC2
+        ssh -i ~/.ssh/deploy_key ec2-user@${{ secrets.AWS_HOST }} "
+          # Pull the latest image
+          echo 'Pulling new Docker image...'
+          docker pull ${DOCKER_IMAGE}
+          
+          # Stop and remove existing container
+          echo 'Stopping existing container...'
+          docker stop nodejs-app || true
+          docker rm nodejs-app || true
+          
+          # Run new container
+          echo 'Starting new container...'
           docker run -d \
             --name nodejs-app \
             --restart unless-stopped \
             -p ${DEPLOY_PORT}:3000 \
-            --health-cmd='curl -f http://localhost:3000/health || exit 1' \
-            --health-interval=30s \
-            --health-timeout=10s \
-            --health-retries=3 \
-            ${DOCKER_IMAGE} && \
-          echo 'Verifying deployment...' && \
-          if ! docker ps | grep -q 'nodejs-app'; then \
-            echo 'Container failed to start' && \
-            exit 1; \
-          fi && \
-          echo 'Cleaning up old images...' && \
-          docker image prune -f"
+            ${DOCKER_IMAGE}
+          
+          # Verify deployment
+          echo 'Verifying deployment...'
+          if ! docker ps | grep -q 'nodejs-app'; then
+            echo 'Container failed to start'
+            exit 1
+          fi
+          
+          # Cleanup old images
+          echo 'Cleaning up old images...'
+          docker image prune -f
+        "
 
     - name: Cleanup
       if: always()
-      run: |
-        rm -rf ~/.ssh/deploy_key ~/.ssh/config
+      run: rm -rf ~/.ssh
