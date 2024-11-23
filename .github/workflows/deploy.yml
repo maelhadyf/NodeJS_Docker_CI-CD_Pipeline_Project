@@ -44,12 +44,18 @@ jobs:
         DOCKER_IMAGE: ${{ secrets.DOCKER_USERNAME }}/nodejs-app:${{ github.sha }}
         DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
       run: |
+        # Setup SSH
         mkdir -p ~/.ssh
         chmod 700 ~/.ssh
+        
+        # Write the SSH key
         echo "${{ secrets.AWS_SSH_KEY }}" > ~/.ssh/deploy_key
         chmod 600 ~/.ssh/deploy_key
-        echo "${{ secrets.AWS_HOST_KEY }}" >> ~/.ssh/known_hosts
         
+        # Disable strict host key checking for this deployment
+        echo "StrictHostKeyChecking no" >> ~/.ssh/config
+        
+        # Deploy
         ssh -i ~/.ssh/deploy_key ec2-user@${{ secrets.AWS_HOST }} "
           set -e
           
@@ -86,4 +92,4 @@ jobs:
     - name: Cleanup
       if: always()
       run: |
-        rm -rf ~/.ssh/deploy_key
+        rm -rf ~/.ssh/deploy_key ~/.ssh/config
