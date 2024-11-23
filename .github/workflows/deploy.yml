@@ -44,31 +44,39 @@ jobs:
         DOCKER_IMAGE: ${{ secrets.DOCKER_USERNAME }}/nodejs-app:${{ github.sha }}
         DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
       run: |
-        # Setup SSH
+        # Setup SSH directory
         mkdir -p ~/.ssh
         chmod 700 ~/.ssh
         
-        # Write the SSH key
+        # Write the private key file
         echo "${{ secrets.AWS_SSH_KEY }}" > ~/.ssh/deploy_key
         chmod 600 ~/.ssh/deploy_key
         
-        # Disable strict host key checking for this deployment
-        echo "StrictHostKeyChecking no" >> ~/.ssh/config
+        # Setup SSH config
+        cat > ~/.ssh/config << EOF
+        Host *
+          StrictHostKeyChecking no
+          UserKnownHostsFile=/dev/null
+          IdentityFile ~/.ssh/deploy_key
+        EOF
+        
+        chmod 600 ~/.ssh/config
+        
+        # For debugging (optional)
+        echo "Testing SSH connection..."
+        ssh -v -i ~/.ssh/deploy_key ec2-user@${{ secrets.AWS_HOST }} "echo 'SSH connection successful'"
         
         # Deploy
-        ssh -i ~/.ssh/deploy_key ec2-user@${{ secrets.AWS_HOST }} "
-          set -e
-          
-          echo 'Pulling Docker image...'
-          docker pull ${DOCKER_IMAGE}
-          
-          echo 'Stopping existing container...'
-          if docker ps -a | grep -q 'nodejs-app'; then
-            docker stop nodejs-app || true
-            docker rm nodejs-app || true
-          fi
-          
-          echo 'Starting new container...'
+        ssh -i ~/.ssh/deploy_key ec2-user@${{ secrets.AWS_HOST }} "\
+          set -e && \
+          echo 'Pulling Docker image...' && \
+          docker pull ${DOCKER_IMAGE} && \
+          echo 'Stopping existing container...' && \
+          if docker ps -a | grep -q 'nodejs-app'; then \
+            docker stop nodejs-app || true && \
+            docker rm nodejs-app || true; \
+          fi && \
+          echo 'Starting new container...' && \
           docker run -d \
             --name nodejs-app \
             --restart unless-stopped \
@@ -77,17 +85,14 @@ jobs:
             --health-interval=30s \
             --health-timeout=10s \
             --health-retries=3 \
-            ${DOCKER_IMAGE}
-          
-          echo 'Verifying deployment...'
-          if ! docker ps | grep -q 'nodejs-app'; then
-            echo 'Container failed to start'
-            exit 1
-          fi
-          
-          echo 'Cleaning up old images...'
-          docker image prune -f
-        "
+            ${DOCKER_IMAGE} && \
+          echo 'Verifying deployment...' && \
+          if ! docker ps | grep -q 'nodejs-app'; then \
+            echo 'Container failed to start' && \
+            exit 1; \
+          fi && \
+          echo 'Cleaning up old images...' && \
+          docker image prune -f"
 
     - name: Cleanup
       if: always()
