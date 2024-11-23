@@ -45,9 +45,11 @@ jobs:
         # SSH into the EC2 instance and deploy the container
         ssh -o StrictHostKeyChecking=no -i ssh_key.pem ec2-user@${{ secrets.AWS_HOST }} << EOF
           # Pull the latest image
+          echo "Pulling Docker image..."
           docker pull $DOCKER_IMAGE
           
           # Stop any running container on the same port
+          echo "Stopping existing container..."
           RUNNING_CONTAINER=$(docker ps --filter "publish=${DEPLOY_PORT}" -q)
           if [ ! -z "$RUNNING_CONTAINER" ]; then
             docker stop $RUNNING_CONTAINER
