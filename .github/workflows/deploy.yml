@@ -56,7 +56,6 @@ jobs:
 
           # Run the container
           docker run -d -p $DEPLOY_PORT:3000 --name nodejs-app $DOCKER_IMAGE
-EOF
 
         # Clean up SSH key
         rm -f ssh_key.pem
