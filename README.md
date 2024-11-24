@@ -132,3 +132,54 @@ A lightweight Express.js application providing:
   - Builds and pushes Docker images.
   - Deploys to the production environment with updated containers.
 
+---
+
+## 🤝 Contributing
+
+We welcome contributions to this project! Follow these steps to contribute:
+
+1. **Fork the repository**  
+   Fork this repository to your own GitHub account.
+
+2. **Create a feature branch**  
+   Create a new branch for your changes. It's best practice to use a descriptive name for your branch.
+
+3. **Commit changes**  
+   Make your changes and commit them with a clear and descriptive commit message.
+
+4. **Push to the branch**  
+   Push your changes to your forked repository on GitHub.
+
+5. **Create a Pull Request**  
+   Create a pull request (PR) from your feature branch to the main branch of the original repository. Provide a description of your changes in the PR.
+
+---
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).
+
+---
+
+## 🆘 Support
+
+If you need support:
+
+- Create an issue in the repository.
+- Contact the maintainers for assistance.
+
+---
+
+## 🔄 Regular Maintenance
+
+To keep this project running smoothly:
+
+- **Update dependencies regularly**: Ensure that all dependencies are up-to-date and secure.
+- **Monitor Docker image sizes**: Keep an eye on Docker image sizes and optimize them when necessary.
+- **Review security alerts**: Stay informed about any security vulnerabilities and apply patches promptly.
+- **Update documentation as needed**: Ensure that documentation stays up-to-date with new features, changes, and fixes.
+
+---
+
+Thank you for being part of this project!
+
