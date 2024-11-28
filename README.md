@@ -155,12 +155,6 @@ We welcome contributions to this project! Follow these steps to contribute:
 
 ---
 
-## 📄 License
-
-This project is licensed under the [MIT License](LICENSE).
-
----
-
 ## 🆘 Support
 
 If you need support:
@@ -181,5 +175,11 @@ To keep this project running smoothly:
 
 ---
 
-Thank you for being part of this project!
+## 📄 License
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
+## ✍️ Author
+**King Memo**
+
+## 🙏 Thank You!
+Thank you for using this project. Your support and feedback are greatly appreciated!
